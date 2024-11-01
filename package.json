@@ -1,0 +1,27 @@
+{
+  "name": "kingdomly-botmint",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/merayupi/kingdomly-botmint.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/merayupi/kingdomly-botmint/issues"
+  },
+  "homepage": "https://github.com/merayupi/kingdomly-botmint#readme",
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.2",
+    "readline-sync": "^1.4.10",
+    "twisters": "^1.1.0"
+  }
+}
