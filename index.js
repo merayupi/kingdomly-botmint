@@ -10,27 +10,53 @@ const twisters = new Twisters();
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const getInfoNFT = async (contract) => {
-    const name = await contract.name();
-    const symbol = await contract.symbol();
-    const {totalSupply, maxSupply} = await getSupplyNFT(contract);
-    const [publicPrice, wlPrice] = await Promise.all([
-        getPrice(contract, 0),
-        getPrice(contract, 1),
-        getPrice(contract, 2)
-        
-    ]);
-    const [maxMintPublic, maxMintWL] = await Promise.all([
-        checkMaxMintPerwallet(contract, 0),
-        checkMaxMintPerwallet(contract, 1)
+    const [name, symbol, supplyInfo] = await Promise.all([
+        contract.name(),
+        contract.symbol(),
+        getSupplyNFT(contract)
     ]);
 
-    console.log(`\nName: ${name} \nSymbol: ${symbol} \nPublic: ${ethers.formatEther(publicPrice.toString())} (max ${maxMintPublic}) | WL: ${ethers.formatEther(wlPrice.toString())} (max ${maxMintWL})\nSupply: ${totalSupply}/${maxSupply}`);
+    const {totalSupply, maxSupply} = supplyInfo;
+    console.log(`\nName: ${name}\nSymbol: ${symbol}\nSupply: ${totalSupply}/${maxSupply}`);
+
+    let count = 0;
+    const maxSupplyPromises = [];
+    while (true) {
+        const result = await getmaxSupplyPerMintGroup(contract, count);
+
+        if (count == 7 && result == 0) break;
+        maxSupplyPromises.push(result);
+        count++;
+    }
+
+    const promises = [];
+    for (let i = 0; i < count; i++) {
+        promises.push(getPrice(contract, i));
+        promises.push(checkMaxMintPerwallet(contract, i));
+    }
+
+    const results = await Promise.all(promises);
+
+    const formattedStrings = [];
+    for (let i = 0; i < count; i++) {
+        const price = results[i * 2];
+        const maxMintPerWallet = results[i * 2 + 1];
+        formattedStrings.push(
+            `Mint ID ${i}: ${ethers.formatEther(price.toString())} (max ${maxMintPerWallet}) | Max Supply: ${maxSupplyPromises[i]}`
+        );
+    }
+
+    formattedStrings.forEach(str => console.log(str));
 }
 
 const getSupplyNFT = async (contract) => {
     const totalSupply = await contract.totalSupply();
     const maxSupply = await contract.maxSupply();
     return {totalSupply, maxSupply};
+}
+
+const getmaxSupplyPerMintGroup = async (contract, mintID) => {
+    return await contract.maxSupplyPerMintGroup(mintID);
 }
 
 const checkPublicMint = async (contract,mintID) => {
@@ -46,7 +72,7 @@ const getPrice = async (contract, groupmint) => {
 }
 
 const mintGroupSelection = async () => {
-    const options = ['Public', 'WL', 'Ecosistem'];
+    const options = ['Mint ID 0', 'Mint ID 1', 'Mint ID 2', 'Mint ID 3', 'Mint ID 4', 'Mint ID 5', 'Exit'];
     let option = rl.keyInSelect(options, 'Select an option: ');
     switch(option) {
         case 0:
@@ -56,6 +82,12 @@ const mintGroupSelection = async () => {
         case 2:
             return parseInt(2);
         case 3:
+            return parseInt(3);
+        case 4:
+            return parseInt(4);
+        case 5:
+            return parseInt(5);
+        case 6:
             process.exit();
     }
 }
@@ -65,17 +97,17 @@ const mintNFT = async (contract, wallet, quantity, index, mintID) => {
     if(!mintID){
         mintID = mintGroupSelection();
     }
-    // const valueMint = await getPrice(contract,mintID)
-    const value = (0+ 0.0015) * quantity ;
+
+    const value = ( process.env.PRICE + process.env.FEE_KINGDOMLY ) * quantity ;
+    const formattedValue = value.toFixed(18);
     try {
         twisters.put(wallet.address, {
             text: `Wallet ${index} | Minting ${quantity} NFTs...`,
         });
 
-        const tx = await contract.batchMint(quantity, mintID, ethers.ZeroAddress, {
-            //todo: change the value to the price of the NFT if free mint 0.0011 eth * quantity  + 0.00001
-            value: ethers.parseEther(value.toString()),
-            gasLimit: 3000000, 
+        const tx = await contract.batchMint(quantity, mintID, {
+            value: ethers.parseEther(formattedValue),
+            gasLimit: process.env.GAS_LIMIT,
         });
 
         const receipt = await tx.wait();
@@ -93,6 +125,8 @@ const mintNFT = async (contract, wallet, quantity, index, mintID) => {
         twisters.put(wallet.address, {
             text: `Wallet ${index} | Error minting NFTs: ${errorMessage}\n`,
         });
+        await delay(50);
+        await mintNFT(contract, wallet, quantity, index, mintID);
     }
 };
 
@@ -100,7 +134,7 @@ const SnipeMintNFT = async (contract, wallet, quantity, index) => {
     try {
         const mintID = await mintGroupSelection();
         console.log("will mint phase: " + mintID);
-        // const mintID = 1;
+
         while(true){
             const isLive = await contract.mintLive();
 
@@ -114,7 +148,7 @@ const SnipeMintNFT = async (contract, wallet, quantity, index) => {
                 });
             }
 
-            await delay(1000);
+            await delay(500);
         }
     } catch (error) {
         console.log(error);
@@ -129,7 +163,7 @@ const menu = async (abi,wallets) => {
 
     const options = ['Mint', 'SnipeMint', 'Exit'];
     let option = rl.keyInSelect(options, 'Select an option: ');
-    // const mintID = mintGroupSelection();
+
     switch(option) {
         case 0:
             const quantity = rl.questionInt('Enter the quantity of NFTs to mint: ');
@@ -153,7 +187,7 @@ const main = async () => {
 
     console.log("Wallet Information:");
     const balances = await Promise.all(wallets.map(wallet => provider.getBalance(wallet.address)));
-    
+
     wallets.forEach((wallet, index) => {
         console.log(`Wallet ${index + 1}:`);
         console.log(`Address: ${wallet.address}`);
