@@ -9,8 +9,9 @@ twisters.put(wallet.address, {
 });
 ```
 
-Feature:
-✅ Can snipe mint before launch\n✅ Multi Wallet
+Feature:  
+✅ Can snipe mint before launch  
+✅ Multi Wallet
 
 Config:
 - For gas you can set gas limit in env
